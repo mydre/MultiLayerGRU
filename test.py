@@ -67,7 +67,7 @@ layer(fmap)
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='hahahahhahahhh')
-    parser.add_argument('--epoch', type=int, default=20, help='epoch size')
+    parser.add_argument('--epoch', type=int, default=50, help='epoch size')
     parser.add_argument('--batch_size', type=int, default=256, help='mini-batch size')
     parser.add_argument('--lr', type=float, default=2e-3, help='learning rate')
     parser.add_argument('--y_dim', type=int, default=5, help='the number of classes')

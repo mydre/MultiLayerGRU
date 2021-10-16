@@ -39,7 +39,7 @@ flat_x_padded.shape: torch.Size([2, 128, 2079])
 '''
 def rel_to_abs(x):  # 此时x的shape是：b,（h x） y r
     b, h, l, _, device, dtype = *x.shape, x.device, x.dtype
-    print('b:',b,'h:',h,'l:',l,'x.shape:',x.shape)
+    # print('b:',b,'h:',h,'l:',l,'x.shape:',x.shape)
     dd = {'device': device, 'dtype': dtype}
     col_pad = torch.zeros((b, h, l, 1), **dd)
     x = torch.cat((x, col_pad), dim = 3) # 从dim=3开始拼接，说明dim=0,1,2的时候得到的都是相同的,前面的结构都是相同的，并且后面的结构也是相同的
@@ -200,6 +200,9 @@ class Attention(nn.Module):
         # print(q.shape,k.shape,v.shape)
         q = q * self.scale  # 相当于提前除以sqrt(balabala)
         sim = einsum('b h i d, b h j d -> b h i j', q, k)  # q和k进行相乘，最后的结果是i,j。只是最后两个维度进行相乘
+        # sim = sim + self.pos_emb(q)  # 相当于attention再加上位置信息
+        # 这里不使用位置embedding看一下
+        #sim = sim + self.pos_emb(q)  # 相当于attention再加上位置信息
         sim = sim + self.pos_emb(q)  # 相当于attention再加上位置信息
 
         attn = sim.softmax(dim = -1)  # 进行softmax操作之后得到最终的注意力向量
@@ -231,7 +234,10 @@ class BottleBlock(nn.Module):
         heads = 4,
         dim_head = 128,
         rel_pos_emb = False,
-        activation = nn.ReLU()
+        # activation = nn.ReLU()
+        # activation = nn.ELU()
+        activation = nn.GELU,
+        # activation = Mish()
     ):
         super().__init__()
         '''
@@ -331,12 +337,16 @@ class BottleStack(nn.Module):
         dim_head = 128,
         downsample = True,
         rel_pos_emb = False,
-        activation = nn.ReLU()
+        # activation = nn.ReLU(),
+        # activation = nn.ELU(),
+        activation = nn.GELU,
+        y_dim
     ):
         super().__init__()
         fmap_size = pair(fmap_size)
         self.dim = dim
         self.fmap_size = fmap_size
+        self.y_dim = y_dim
 
         layers = []  # 通过for循环讲多个模型添加到这个list当中，因为添加的是三个相同的block
 
@@ -359,21 +369,38 @@ class BottleStack(nn.Module):
                 rel_pos_emb = rel_pos_emb,
                 activation = activation
             ))
-
         self._reshapeNet = ReshapeNet()
-        self.linear1 = nn.Linear(8 * 9 * 9, 256)
-        self.linear2 = nn.Linear(256, 64)
-        self.linear4 = nn.Linear(64, 16)
-        self.linear3 = nn.Linear(16, 5)
-        self.net = nn.Sequential(*layers,self._reshapeNet,self.linear1,self.linear2,self.linear4,self.linear3)
+
+        self.linear1 = nn.Linear(8 * 9 * 9, 64)
+        self.linear4 = nn.Linear(64,32)
+        self.linear2 = nn.Linear(32, 16)
+        self.linear5 = nn.Linear(16, 8)
+        self.linear3 = nn.Linear(8, y_dim)
+        self.net_atten = nn.Sequential(*layers)
+        self.net_stackOne = nn.Sequential(self._reshapeNet,self.linear1,self.linear4,self.linear2,self.linear5, self.linear3)
+
+        # self._linear1 = nn.Linear(y_dim,16)
+        # self._linear2 = nn.Linear(16, 64)
+        # self._linear3 = nn.Linear(64, y_dim)
+        # self.net_stackTwo = nn.Sequential(self._linear1,self._linear2,self._linear3)
 
     def forward(self, x):
         # print('x.shape:',x.shape)  # 2,256,64,64
         _, c, h, w = x.shape
         assert c == self.dim, f'channels of feature map {c} must match channels given at init {self.dim}'  # 这个是assert的提示信息，如果报错了可以很方便查看提示信息
         assert h == self.fmap_size[0] and w == self.fmap_size[1], f'height and width ({h} {w}) of feature map must match the fmap_size given at init {self.fmap_size}'
-        # return self.net(x)  # 这个net中有多个BottleBlock网络块
-        return self.net(x)  # 这个net中有多个BottleBlock网络块
+        x = self.net_atten(x)  # 这个net中有多个BottleBlock网络块
+        x = self.net_stackOne(x)
+        return x
+        # x2 = self.net_stackOne(x)
+        # x = self.net_change(x)
+        # x3 = self.net_stackTwo(x2)
+        # return x2
+        # x2 = self.net2(x)
+        # return x1 + x2/2.0
+
+        # x2 = self.net2(x)
+        # return x2
         # x = x.view(x.shape[0],-1)
         # x = self.net2(x)
 
@@ -384,3 +411,10 @@ class ReshapeNet(nn.Module):
 
     def forward(self, input):
         return input.view(input.shape[0], -1)
+
+class ReshapeNet2(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, input):
+        return input.view(input.shape[0],1,-1)

@@ -99,7 +99,7 @@ class Solver(object):
 
 
         # 使用bottleneck
-        self.net = cuda(BottleStack(dim=1,fmap_size=self.pixel_width,dim_out=8,proj_factor=4,downsample=True,heads=4,dim_head=8,rel_pos_emb=False,activation=nn.ReLU()), self.cuda)
+        self.net = cuda(BottleStack(dim=1,fmap_size=self.pixel_width,dim_out=8,proj_factor=4,downsample=True,heads=4,dim_head=8,rel_pos_emb=False,activation=nn.ReLU(), y_dim=self.y_dim), self.cuda)
 
         # Optimizers
         # self.optim = optim.Adam([{'params':self.net.parameters(), 'lr':self.lr}],betas=(0.5, 0.999))
@@ -160,6 +160,7 @@ class Solver(object):
     def train(self,args):
         self.set_mode('train')
         lr = args.lr
+        print(len(self.data_loader['train']))
         for e in range(1,self.epoch+1):
 
             self.global_epoch += 1
@@ -192,13 +193,14 @@ class Solver(object):
                 >>>
                 '''
                 # logit.max(1)[1]其中(1)表示行的最大值，[0]表示最大的值本身,[1]表示最大的那个值在该行对应的index
-                # soft_logit = F.softmax(logit)
+                # soft_logit = F.softmax(logit) ,使用这个效果不好
                 soft_logit = logit
 
                 prediction = soft_logit.max(1)[1] # prediction.shape: torch.Size([100]),此时，y == [1,2,1,1,1,3,5...],prediction也是类似的形式
                 correct = torch.eq(prediction, y).float().mean() # 先转换为flotaTensor，然后[0]取出floatTensor中的值：0.11999999731779099
                 # out = self._arcface(logit,y)
                 # cost = F.cross_entropy(logit, y) # cost也是一个Variable,计算出的cost是一个损失
+
                 loss_ = F.cross_entropy(soft_logit, y) # cost也是一个Variable,计算出的cost是一个损失
                 # cost = F.cross_entropy(out, y) # cost也是一个Variable,计算出的cost是一个损失
 
@@ -214,12 +216,13 @@ class Solver(object):
                 self.optim.zero_grad()
                 cost.backward()
                 self.optim.step()
-                if batch_idx % 200 == 0:
+                if batch_idx % 500 == 0:
                     if self.print_:
-                        print()
-                        print(self.env_name)
-                        print('[{:03d}:{:03d}]'.format(self.global_epoch, batch_idx))
-                        print('acc:{:.3f} loss:{:.3f}'.format(correct, cost.data))
+                        # print()
+                        # print(self.env_name)
+                        logger.info('[{:03d}:{:05d}]'.format(self.global_epoch, batch_idx) + '  ' + 'acc:{:.3f} loss:{:.3f}'.format(correct, cost.data))
+                        # print('[{:03d}:{:03d}]'.format(self.global_epoch, batch_idx))
+                        # print('acc:{:.3f} loss:{:.3f}'.format(correct, cost.data))
 
                     if self.tensorboard:
                         self.tf.add_scalars(main_tag='performance/acc',
@@ -269,8 +272,8 @@ class Solver(object):
             correct += cc
             ct = F.cross_entropy(logit, y).item()
             cost += ct
-            if idx % 100 == 0:
-                logger.info('【batch_id】--->' + str(idx) + ' 【cur_correct】--->' + str(cc) + '  【cur_cost】--->' + str(ct) + '  【accumu_cost】--->' + str(cost) + ' 【accumu_correct】--->' + str(correct))
+            if idx % 500 == 0:
+                logger.info('【batch_id】' + '%.6s' % str(idx) + '【cur_correct】' + '%.6s' % str(cc) + '【cur_cost】' +'%.6s' % str(ct) + '【accumu_cost】' +'%.6s' % str(cost) + '【accumu_correct】' +'%.6s' % str(correct))
             total += x.size(0)
 
         accuracy = correct / total
@@ -278,11 +281,12 @@ class Solver(object):
 
 
         if self.print_:
-            print()
-            print('[{:03d}]\nTEST RESULT'.format(self.global_epoch))
-            print('ACC:{:.4f}'.format(accuracy))
-            print('*TOP* ACC:{:.4f} at e:{:03d}, COST:{:.4f}'.format(accuracy, self.global_epoch,cost))
-            print()
+            # print()
+            # print('[{:03d}]\nTEST RESULT'.format(self.global_epoch))
+            # print('ACC:{:.4f}'.format(accuracy))
+            # print('*TOP* ACC:{:.4f} at e:{:03d}, COST:{:.4f}'.format(accuracy, self.global_epoch,cost))
+            # print()
+            logger.info('[{:03d}] TEST RESULT'.format(self.global_epoch) + ' ' + 'ACC:{:.4f}'.format(accuracy) + ' ' +'*TOP* ACC:{:.4f} at e:{:03d}, COST:{:.4f}'.format(accuracy, self.global_epoch,cost))
 
             if self.tensorboard:
                 self.tf.add_scalars(main_tag='performance/acc',
@@ -352,38 +356,6 @@ class Solver(object):
                                 tag_scalar_dict={'test': self.history['acc']},
                                 global_step=self.history['iter'])
         print(" [*] Generating Finished!")
-        #save_image(x_true,
-        #           self.output_dir.joinpath('legitimate(t:{},e:{},i:{}).jpg'.format(target,
-        #                                                                            epsilon,
-        #                                                                            iteration)),
-        #           nrow=10,
-        #           padding=2,
-        #           pad_value=0.5)
-        #save_image(x_adv,
-        #           self.output_dir.joinpath('perturbed(t:{},e:{},i:{}).jpg'.format(target,
-        #                                                                           epsilon,
-        #                                                                           iteration)),
-        #           nrow=10,
-        #           padding=2,
-        #           pad_value=0.5)
-        #save_image(changed,
-        #           self.output_dir.joinpath('changed(t:{},e:{},i:{}).jpg'.format(target,
-        #                                                                         epsilon,
-        #                                                                         iteration)),
-        #           nrow=10,
-        #           padding=3,
-        #           pad_value=0.5)
-
-        #if self.visdom:
-        #    self.vf.imshow_multi(x_true.cpu(), title='legitimate', factor=1.5)
-        #    self.vf.imshow_multi(x_adv.cpu(), title='perturbed(e:{},i:{})'.format(epsilon, iteration), factor=1.5)
-        #    self.vf.imshow_multi(changed.cpu(), title='changed(white)'.format(epsilon), factor=1.5)
-
-           #     print('[对抗样本，更新之后的net] accuracy : {:.2f} cost : {:.3f}'.format(accuracy, cost))
-           #     print('[对抗样本，更新之前的net] accuracy : {:.2f} cost : {:.3f}'.format(accuracy_adv, cost_adv))
-           #     print('-----------------------------------',batch_idx)
-
-           # self.set_mode('train')
 
     def sample_data(self, num_sample=100):
 
@@ -400,72 +372,6 @@ class Solver(object):
         x = self.scale(x.float().div(255)) #  x.float().unsqueeze(1).div(255), x.float().unsqueeze(1).div(255).mul(2).add(-1)
         y = torch.from_numpy(self.data_loader['test'].dataset.train_labels[seed]).long()# Tensor的类型设置为long
         return x, y
-
-
-    def FGSM(self, x, y_true, y_target=None, eps=0.03, alpha=2/255, iteration=1): # 这个函数里面可能会调用fgsm，也可能会调用i-fgsm
-        self.set_mode('eval')
-        # 在转换之前x和y_true的类型都是：torch.FloatTensor
-        x = Variable(cuda(x, self.cuda), requires_grad=True)
-
-
-        y_true = Variable(cuda(y_true, self.cuda), requires_grad=False)
-        if y_target is not None:
-            targeted = True
-            y_target = Variable(cuda(y_target, self.cuda), requires_grad=False)
-        else:
-            targeted = False
-
-
-        #pdb.set_trace()
-        h = self.net(x)  # h相当于是logits？
-        prediction = h.max(1)[1]  # 每行最大的那个值的索引
-        accuracy1 = torch.eq(prediction, y_true).float().mean()
-        cost1 = F.cross_entropy(h, y_true)  # 直接logits和y_true直接计算交叉熵损失
-        # print('[原始x，更新之前的net] accuracy : {:.2f} cost : {:.3f}'.format(accuracy.data[0], cost.data[0]))
-        if iteration == 1: # 这里只对单个样本进行处理
-            if targeted:
-                x_adv, h_adv, h = self.attack.fgsm(x, y_target, True, eps)
-            else:
-                x_adv, h_adv, h = self.attack.fgsm(x, y_true, False, eps)
-        else:
-            if targeted: # 这里对多个样本进行处理，因为iterator不是1
-                x_adv, h_adv, h = self.attack.i_fgsm(x, y_target, True, eps, alpha, iteration)
-            else:
-                x_adv, h_adv, h = self.attack.i_fgsm(x, y_true, False, eps, alpha, iteration)
-
-        prediction = h.max(1)[1]
-        accuracy = torch.eq(prediction,y_true).float().mean()
-        cost = F.cross_entropy(h,y_true)
-        # print('[原始x，更新之后的net] accuracy : {:.2f} cost : {:.3f}'.format(accuracy.data[0], cost.data[0]))
-
-        # 对抗样本输入到更新之后的net
-        h = self.net(x_adv)  # h相当于是logits？
-        prediction = h.max(1)[1]  # 每行最大的那个值的索引
-        accuracy = torch.eq(prediction, y_true).float().mean()
-        cost = F.cross_entropy(h, y_true)  # 直接logits和y_true直接计算交叉熵损失
-
-        prediction_adv = h_adv.max(1)[1]
-        accuracy_adv = torch.eq(prediction_adv, y_true).float().mean()
-        cost_adv = F.cross_entropy(h_adv, y_true)
-
-        ## make indication of perturbed images that changed predictions of the classifier
-        #if targeted:
-        #    changed = torch.eq(y_target, prediction_adv)
-        #else:
-        #    changed = torch.eq(prediction, prediction_adv)
-        #    changed = torch.eq(changed, 0)
-        #changed = changed.float().view(-1, 1, 1, 1).repeat(1, 3, 28, 28)
-
-        #changed[:, 0, :, :] = where(changed[:, 0, :, :] == 1, 252, 91)
-        #changed[:, 1, :, :] = where(changed[:, 1, :, :] == 1, 39, 252)
-        #changed[:, 2, :, :] = where(changed[:, 2, :, :] == 1, 25, 25)
-        #changed = self.scale(changed/255)
-        #changed[:, :, 3:-2, 3:-2] = x_adv.repeat(1, 3, 1, 1)[:, :, 3:-2, 3:-2]
-
-        self.set_mode('train')
-
-        # return (accuracy.data[0], cost.data[0], accuracy_adv.data[0], cost_adv.data[0])
-        return (accuracy1.data[0], cost1)
 
     def save_checkpoint(self, filename='ckpt.tar'):# 保存checkpoint
         model_states = {
@@ -485,7 +391,8 @@ class Solver(object):
 
         file_path = self.ckpt_dir / filename
         torch.save(states, file_path.open('wb+'))
-        print("=> saved checkpoint '{}' (iter {})".format(file_path, self.global_iter))
+        # print("=> saved checkpoint '{}' (iter {})".format(file_path, self.global_iter))
+        logger.info("saved checkpoint'{}'(iter{})".format(file_path, self.global_iter))
 
     def load_checkpoint(self, filename='best_acc.tar'):
         file_path = self.ckpt_dir / filename

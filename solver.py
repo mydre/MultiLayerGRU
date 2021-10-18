@@ -14,6 +14,7 @@ import numpy as np
 from bottleneck_transformer_pytorch.bottleneck_transformer_pytorch import BottleStack
 from torch import nn
 from loguru import logger
+import datetime
 
 
 class Solver(object):
@@ -41,6 +42,8 @@ class Solver(object):
         self.visdom = args.visdom
 
         self.ckpt_dir = Path(args.ckpt_dir).joinpath(args.env_name)
+
+        self.desc = args.desc
         if not self.ckpt_dir.exists():
             self.ckpt_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir = Path(args.output_dir).joinpath(args.env_name)
@@ -83,23 +86,8 @@ class Solver(object):
             self.tf.add_text(tag='argument', text_string=str(args), global_step=self.global_epoch)
 
     def model_init(self):
-        # 1.使用ToyNet
-        #self.net = cuda(ToyNet(y_dim=self.y_dim,pixel_width=self.pixel_width), self.cuda)
-        #self.net.weight_init(_type='kaiming')
-
-        # 2.使用TCN
-        # channel_sizes = [25] * 8
-        # self.net = cuda(TCN(1,self.y_dim,channel_sizes,kernel_size=7,dropout=0.05),self.cuda)
-
-        
-        # 使用WideResNet
-        # self.net = cuda(WideResNet(num_classes=self.y_dim, pixel_width = self.pixel_width), self.cuda)
-
-
-
-
         # 使用bottleneck
-        self.net = cuda(BottleStack(dim=1,fmap_size=self.pixel_width,dim_out=8,proj_factor=4,downsample=True,heads=4,dim_head=8,rel_pos_emb=False,activation=nn.ReLU(), y_dim=self.y_dim), self.cuda)
+        self.net = cuda(BottleStack(dim=1,fmap_size=self.pixel_width,dim_out=8,proj_factor=4,downsample=True,heads=4,dim_head=8,rel_pos_emb=False, y_dim=self.y_dim), self.cuda)
 
         # Optimizers
         # self.optim = optim.Adam([{'params':self.net.parameters(), 'lr':self.lr}],betas=(0.5, 0.999))
@@ -160,6 +148,7 @@ class Solver(object):
     def train(self,args):
         self.set_mode('train')
         lr = args.lr
+        _diff = (lr - lr/10.0)/20.0
         print(len(self.data_loader['train']))
         for e in range(1,self.epoch+1):
 
@@ -235,10 +224,13 @@ class Solver(object):
                                             tag_scalar_dict={'train':cost.data[0]},
                                             global_step=self.global_iter)
             self.test()
-            if e % 10 == 0:
-                lr = lr * 0.8
-                for param_group in self.optim.param_groups:
-                    param_group['lr'] = lr
+            lr = lr - _diff
+            for param_group in self.optim.param_groups:
+                param_group['lr'] = lr
+            # if e % 10 == 0:
+            #     lr = lr * 0.8
+            #     for param_group in self.optim.param_groups:
+            #         param_group['lr'] = lr
 
         if self.tensorboard:
             self.tf.add_scalars(main_tag='performance/best/acc',
@@ -309,7 +301,34 @@ class Solver(object):
 
         self.set_mode('train')
 
+    def gene_label(self):
+        self.set_mode('eval')
+        data_loader = self.data_loader['test']
+        idx = 0
+        today = datetime.date.today()
+        today = today.strftime('%Y-%m-%d')
+        arrs_Ytrue = np.ndarray(0)
+        arrs_Ypred = np.ndarray(0)
+        for images, labels in data_loader:  # 相当于测试的时候也是和训练的时候一样直接通过迭代器取出来的值
+            idx += 1
+            # pdb.set_trace()
+            x = Variable(cuda(images, self.cuda))
+            y = Variable(cuda(labels, self.cuda))
+            # x = x.view(-1, 1, self.pixel_width,self.pixel_width)
+            logit = self.net(x)
+            prediction = logit.max(1)[1]
+            arrs_Ytrue = np.append(arrs_Ytrue,y.cpu().numpy())
+            arrs_Ypred = np.append(arrs_Ypred,prediction.cpu().numpy())
+        file_name1 = 'arrs_Ytrue{0}_{1}.npy'.format(today,self.desc)
+        file_name2 = 'arrs_Ypred{0}_{1}.npy'.format(today,self.desc)
+        np.save(file_name1, arrs_Ytrue)
+        np.save(file_name2, arrs_Ypred)
+        print(file_name1, '保存完成')
+        print(file_name2, '保存完成')
+
+
     def generate(self, num_sample=100, target=-1, epsilon=0.03, alpha=2/255, iteration=1):
+
         self.set_mode('eval')
 
         for e in range(1):#假设有5个epoch

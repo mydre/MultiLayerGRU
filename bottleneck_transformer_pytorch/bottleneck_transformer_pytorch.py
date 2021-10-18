@@ -236,7 +236,7 @@ class BottleBlock(nn.Module):
         rel_pos_emb = False,
         # activation = nn.ReLU()
         # activation = nn.ELU()
-        activation = nn.GELU,
+        activation,  # 这里activation可由上层模型传递而来
         # activation = Mish()
     ):
         super().__init__()
@@ -272,7 +272,6 @@ class BottleBlock(nn.Module):
 
         attn_dim_in = dim_out // proj_factor  # 相当于2048/4 == 512
         attn_dim_out = heads * dim_head  # 4 * 128 = 512
-
         self.net = nn.Sequential(
             nn.Conv2d(dim, attn_dim_in, 1, bias = False),  # 输入通道数目是256(这个是从输入数据中得来的)，输出512通道数目.(256, 512)
             nn.BatchNorm2d(attn_dim_in),  # 512
@@ -288,7 +287,7 @@ class BottleBlock(nn.Module):
             nn.AvgPool2d((2, 2)) if downsample else nn.Identity(),
             nn.BatchNorm2d(attn_dim_out),  # attn_dim_out在这个地方用到
             activation,
-            nn.Conv2d(attn_dim_out, dim_out, 1, bias = False),
+            nn.Conv2d(attn_dim_out, dim_out, 1, bias = False),  # 需要注意的是，这里卷积层的kernel_size是1,所以没有改变图像的size，只是改变了通道的大小
             nn.BatchNorm2d(dim_out)
         )
         # 在init函数中构造出各个结构，如shotcut结构，和net结构
@@ -297,7 +296,6 @@ class BottleBlock(nn.Module):
         nn.init.zeros_(self.net[-1].weight)
 
         # final activation
-
         self.activation = activation
 
     '''
@@ -339,7 +337,8 @@ class BottleStack(nn.Module):
         rel_pos_emb = False,
         # activation = nn.ReLU(),
         # activation = nn.ELU(),
-        activation = nn.GELU,
+        # activation = nn.GELU(),
+        activation = nn.ReLU(),
         y_dim
     ):
         super().__init__()
@@ -347,7 +346,6 @@ class BottleStack(nn.Module):
         self.dim = dim
         self.fmap_size = fmap_size
         self.y_dim = y_dim
-
         layers = []  # 通过for循环讲多个模型添加到这个list当中，因为添加的是三个相同的block
 
         for i in range(num_layers):

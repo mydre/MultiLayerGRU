@@ -34,6 +34,8 @@ def main(args):
         net.train(args)
     elif args.mode == 'test':
         net.test()
+    elif args.mode == 'gene_label':
+        net.gene_label()
     elif args.mode == 'generate':
         net.generate(num_sample=args.batch_size,
                      target=args.target,
@@ -91,6 +93,7 @@ if __name__ == "__main__":
     parser.add_argument('--tensorboard', type=str2bool, default=False, help='enable tensorboard')
     parser.add_argument('--visdom', type=str2bool, default=False, help='enable visdom')
     parser.add_argument('--visdom_port', type=str, default=55558, help='visdom port')
+    parser.add_argument('--desc', type=str, default='', help='the describe of generated Label')
     args = parser.parse_args()
 
     main(args)

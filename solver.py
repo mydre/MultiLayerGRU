@@ -143,14 +143,12 @@ class Solver(object):
 
         return Lx, Lu, 75 * self.linear_rampup(epoch)
 
-
     
     def train(self,args):
         self.set_mode('train')
         lr = args.lr
-        _diff = (lr - lr/10.0)/20.0
         print(len(self.data_loader['train']))
-        for e in range(1,self.epoch+1):
+        for e in range(1,self.epoch+1): # e从1开始算起
 
             self.global_epoch += 1
             for batch_idx, (images, labels) in enumerate(self.data_loader['train']):
@@ -224,13 +222,10 @@ class Solver(object):
                                             tag_scalar_dict={'train':cost.data[0]},
                                             global_step=self.global_iter)
             self.test()
-            lr = lr - _diff
-            for param_group in self.optim.param_groups:
-                param_group['lr'] = lr
-            # if e % 10 == 0:
-            #     lr = lr * 0.8
-            #     for param_group in self.optim.param_groups:
-            #         param_group['lr'] = lr
+            if e % 10 == 0:
+                lr = lr * 0.8
+                for param_group in self.optim.param_groups:
+                    param_group['lr'] = lr
 
         if self.tensorboard:
             self.tf.add_scalars(main_tag='performance/best/acc',
@@ -254,11 +249,7 @@ class Solver(object):
             y = Variable(cuda(labels, self.cuda))
             # x = x.view(-1, 1, self.pixel_width,self.pixel_width)
             logit = self.net(x)
-
-
-
             prediction = logit.max(1)[1]
-
             #correct += torch.eq(prediction, y).float().sum() # 这里不是通过mean的方式，而是通过sum的方式加在一起（即：正确的样本的个数）
             cc = torch.eq(prediction, y).float().sum().item() # 这里不是通过mean的方式，而是通过sum的方式加在一起（即：正确的样本的个数）
             correct += cc

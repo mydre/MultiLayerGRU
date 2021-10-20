@@ -36,6 +36,8 @@ def main(args):
         net.test()
     elif args.mode == 'gene_label':
         net.gene_label()
+    elif args.mode == 'gene_probability':
+        net.gene_probability()
     elif args.mode == 'generate':
         net.generate(num_sample=args.batch_size,
                      target=args.target,
@@ -85,7 +87,7 @@ if __name__ == "__main__":
     parser.add_argument('--load_ckpt', type=str, default='', help='')
     parser.add_argument('--cuda', type=str2bool, default=True, help='enable cuda')
     parser.add_argument('--silent', type=str2bool, default=False, help='')
-    parser.add_argument('--mode', type=str, default='train', help='train / test / generate / universal')
+    parser.add_argument('--mode', type=str, default='train', help='train / test / generate / universal / gene_label / gene_probability')
     parser.add_argument('--seed', type=int, default=1, help='random seed')
     parser.add_argument('--iteration', type=int, default=1, help='the number of iteration for FGSM')
     parser.add_argument('--epsilon', type=float, default=0.03, help='epsilon for FGSM and i-FGSM')

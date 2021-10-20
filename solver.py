@@ -318,6 +318,33 @@ class Solver(object):
         print(file_name2, '保存完成')
 
 
+    def gene_probability(self):
+        self.set_mode('eval')
+        data_loader = self.data_loader['test']
+        idx = 0
+        today = datetime.date.today()
+        today = today.strftime('%Y-%m-%d')
+        arrs_Ytrue = np.ndarray(0)
+        arrs_Ypred = np.empty(shape=[0,self.y_dim])
+        for images, labels in data_loader:  # 相当于测试的时候也是和训练的时候一样直接通过迭代器取出来的值
+            idx += 1
+            x = Variable(cuda(images, self.cuda))
+            y = Variable(cuda(labels, self.cuda))
+            logit = self.net(x)
+            # prediction = logit.max(1)[1]
+            # prediction = F.softmax(logit)[:,1] # 属于攻击类别的概率
+            prediction = F.softmax(logit) # 现在把所有类别的所有样本的概率都返回，后期处理的时候再进行筛选
+            arrs_Ytrue = np.append(arrs_Ytrue, y.cpu().numpy())
+            # 有梯度，则需要使用detach()来消除梯度,这里axis要表示为0，不然结果维度是1不是2
+            arrs_Ypred = np.append(arrs_Ypred, prediction.detach().cpu().numpy(),axis=0)
+        file_name1 = 'roc_arrs_Ytrue{0}_{1}.npy'.format(today, self.desc)
+        file_name2 = 'roc_arrs_Ypred{0}_{1}.npy'.format(today, self.desc)
+        np.save(file_name1, arrs_Ytrue)
+        np.save(file_name2, arrs_Ypred)
+        print(file_name1, '保存完成')
+        print(file_name2, '保存完成')
+
+
     def generate(self, num_sample=100, target=-1, epsilon=0.03, alpha=2/255, iteration=1):
 
         self.set_mode('eval')

@@ -368,7 +368,6 @@ class BottleStack(nn.Module):
                 activation = activation
             ))
         self._reshapeNet = ReshapeNet()
-
         self.linear1 = nn.Linear(8 * 9 * 9, 64)
         self.linear4 = nn.Linear(64,32)
         self.linear2 = nn.Linear(32, 16)

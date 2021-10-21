@@ -12,6 +12,7 @@ from utils.utils import rm_dir, cuda, where
 import pdb
 import numpy as np
 from bottleneck_transformer_pytorch.bottleneck_transformer_pytorch import BottleStack
+from bottleneck_transformer_pytorch.bottleneck_transformer_pytorch import MyGruNet
 from torch import nn
 from loguru import logger
 import datetime
@@ -88,15 +89,11 @@ class Solver(object):
     def model_init(self):
         # 使用bottleneck
         self.net = cuda(BottleStack(dim=1,fmap_size=self.pixel_width,dim_out=8,proj_factor=4,downsample=True,heads=4,dim_head=8,rel_pos_emb=False, y_dim=self.y_dim), self.cuda)
+        # self.net = cuda(MyGruNet(y_dim = self.y_dim,pixel_width=self.pixel_width),self.cuda)
 
         # Optimizers
         # self.optim = optim.Adam([{'params':self.net.parameters(), 'lr':self.lr}],betas=(0.5, 0.999))
         self.optim = optim.Adam([{'params':self.net.parameters(), 'lr':self.lr}])
-
-    #     fmap = torch.randn(2, 1, 43, 43)
-    #     print(fmap.shape)
-    #     layer(fmap)
-    #
 
     def at_loss(self,x,y):
         x_adv = Variable(x.data,requires_grad=True)
@@ -157,6 +154,8 @@ class Solver(object):
 
                 x = Variable(cuda(images, self.cuda)) # torch.Size([256, 1, 43, 43])
                 y = Variable(cuda(labels, self.cuda)) # torch.Size([256])
+                # x = torch.autograd.Variable(cuda(images, self.cuda))
+                # y = torch.autograd.Variable(cuda(labels, self.cuda))
                 '''
                 经过net处理之后得到一个10分类的输出,logit.shape:[100,10]，所以一个batch有100个样本
                 logit[0] == [0.0545  0.1646  0.0683 -0.1407  0.0031  0.0560 -0.1895 -0.0183  0.0158  0.0183】
@@ -180,7 +179,7 @@ class Solver(object):
                 >>>
                 '''
                 # logit.max(1)[1]其中(1)表示行的最大值，[0]表示最大的值本身,[1]表示最大的那个值在该行对应的index
-                # soft_logit = F.softmax(logit) ,使用这个效果不好
+                # soft_logit = F.softmax(logit)
                 soft_logit = logit
 
                 prediction = soft_logit.max(1)[1] # prediction.shape: torch.Size([100]),此时，y == [1,2,1,1,1,3,5...],prediction也是类似的形式
@@ -201,7 +200,7 @@ class Solver(object):
                 # cost = loss_lds
                 cost = loss_
                 self.optim.zero_grad()
-                cost.backward()
+                cost.backward()  # 反向传播之后可以进行参数的更新,反向传播的是那个网络，更新的就是哪个网络的参数
                 self.optim.step()
                 if batch_idx % 500 == 0:
                     if self.print_:

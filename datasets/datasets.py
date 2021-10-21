@@ -43,7 +43,7 @@ def load_data(data_folder,data_name,label_name,p_width):
     data_name:数据文件名
     label_name: 标签数据文件名
     '''
-    with gzip.open(os.path.join(data_folder,label_name),'rb') as lbpath:
+    with gzip.open(os.path.join(data_folder,label_name),'rb') as lbpath:  # 从二进制文件中读取数据
         y_train = np.frombuffer(lbpath.read(),np.uint8,offset=8) # 偏移8个字节
 
     with gzip.open(os.path.join(data_folder,data_name),'rb') as imgpath:

@@ -436,7 +436,7 @@ class ReshapeNet3(nn.Module):
     h_n :[D * NL, N, HD]
 '''
 class MyGruNet(nn.Module):
-    def __init__(self,*,y_dim,num_steps,input_size,hidden_size = 64,num_layer = 9,is_bidirectional = True):
+    def __init__(self,*,y_dim,num_steps,input_size,hidden_size = 64,num_layer = 8,is_bidirectional = True):
         super().__init__()
         self.IP = input_size # self.IP表示input_size
         self.L= num_steps # self.L表示num_stes
@@ -449,7 +449,6 @@ class MyGruNet(nn.Module):
         self._reshape3 = ReshapeNet3(self.D,self.L,self.HD,self.NL)
 
         self.linear1 = nn.Linear(self.D * self.L * self.HD, 64)
-        # self.linear1 = nn.Linear(self.D * self.NL * self.HD, 64)
         self.linear4 = nn.Linear(64, 32)
         self.linear2 = nn.Linear(32, 16)
         self.linear5 = nn.Linear(16, 8)

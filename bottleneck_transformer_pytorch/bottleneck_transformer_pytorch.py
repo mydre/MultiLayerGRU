@@ -369,7 +369,7 @@ class BottleStack(nn.Module):
             ))
 
 
-        self._mygruNet = MyGruNet(y_dim = self.y_dim,num_steps=fmap_size[0],input_size=fmap_size[0])
+        self._mygruNet = MyGruNet(y_dim = self.y_dim,num_steps=18,input_size=36) # [128,8,9,9] = [128,18,36] = [18,-1,36]
 
         self._reshapeNet = ReshapeNet()
         self.linear1 = nn.Linear(8 * 9 * 9, 64)
@@ -385,10 +385,9 @@ class BottleStack(nn.Module):
         _, c, h, w = x.shape
         assert c == self.dim, f'channels of feature map {c} must match channels given at init {self.dim}'  # 这个是assert的提示信息，如果报错了可以很方便查看提示信息
         assert h == self.fmap_size[0] and w == self.fmap_size[1], f'height and width ({h} {w}) of feature map must match the fmap_size given at init {self.fmap_size}'
-        out = self._mygruNet(x)
         x = self.net_atten(x)  # 这个net中有多个BottleBlock网络块
-        x = self.net_stackOne(x)
-        return x + out
+        out = self._mygruNet(x)
+        return out
 
 
 class ReshapeNet(nn.Module):
@@ -400,12 +399,13 @@ class ReshapeNet(nn.Module):
 
 
 class ReshapeNet2(nn.Module):
-    def __init__(self,L):
+    def __init__(self,L,IP):
         super().__init__()
         self.L = L
+        self.IP = IP
 
     def forward(self, input):
-        return input.view(self.L,-1,self.L)
+        return input.view(self.L,-1,self.IP)
 
 
 class ReshapeNet3(nn.Module):
@@ -436,7 +436,7 @@ class ReshapeNet3(nn.Module):
     h_n :[D * NL, N, HD]
 '''
 class MyGruNet(nn.Module):
-    def __init__(self,*,y_dim,num_steps,input_size,hidden_size = 64,num_layer = 9,is_bidirectional = True):
+    def __init__(self,*,y_dim,num_steps,input_size,hidden_size = 64,num_layer = 3,is_bidirectional = True):
         super().__init__()
         self.IP = input_size # self.IP表示input_size
         self.L= num_steps # self.L表示num_stes
@@ -445,7 +445,7 @@ class MyGruNet(nn.Module):
         self.D = 1 if not is_bidirectional else 2
         self.gru = nn.GRU(self.IP,self.HD,self.NL,bidirectional=is_bidirectional)  # [IP,HD,NL] 表示input_size,hidden_size,num_layers
 
-        self._reshape2 = ReshapeNet2(self.L)
+        self._reshape2 = ReshapeNet2(self.L,self.IP)
         self._reshape3 = ReshapeNet3(self.D,self.L,self.HD,self.NL)
 
         self.linear1 = nn.Linear(self.D * self.L * self.HD, 64)

@@ -1,7 +1,7 @@
 """main.py"""
 import argparse
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import numpy as np
 import torch

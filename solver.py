@@ -8,13 +8,16 @@ from torch.autograd import Variable
 from torchvision.utils import save_image
 
 from datasets.datasets import return_data2
+from datasets.datasets_ndarray import return_data # 读取用于存放gan生成的ndarray数组的数据集
 from utils.utils import rm_dir, cuda, where
 import pdb
 import numpy as np
 from bottleneck_transformer_pytorch.bottleneck_transformer_pytorch import BottleStack
+from bottleneck_transformer_pytorch.wgan import Generator,Discriminator,gradient_penalty
 from torch import nn
 from loguru import logger
 import datetime
+from torchvision import transforms
 
 
 class Solver(object):
@@ -33,6 +36,7 @@ class Solver(object):
         self.dataset = args.dataset
         # self.data_loader = return_data(args)
         self.data_loader = return_data2(args)
+        self.data_loader_gan = return_data(args)
         self.global_epoch = 0
         self.global_iter = 0
         self.print_ = not args.silent
@@ -88,10 +92,14 @@ class Solver(object):
     def model_init(self):
         # 使用bottleneck
         self.net = cuda(BottleStack(dim=1,fmap_size=self.pixel_width,dim_out=8,proj_factor=4,downsample=True,heads=4,dim_head=8,rel_pos_emb=False, y_dim=self.y_dim), self.cuda)
+        self.G = cuda(Generator(self.pixel_width**2,400),self.cuda)
+        self.D = cuda(Discriminator(self.pixel_width**2,400),self.cuda)
 
         # Optimizers
         # self.optim = optim.Adam([{'params':self.net.parameters(), 'lr':self.lr}],betas=(0.5, 0.999))
         self.optim = optim.Adam([{'params':self.net.parameters(), 'lr':self.lr}])
+        self.optim_G = optim.Adam(self.G.parameters(), lr = self.lr, betas=(0.5, 0.9))
+        self.optim_D = optim.Adam(self.D.parameters(), lr = self.lr, betas=(0.5, 0.9))
 
     #     fmap = torch.randn(2, 1, 43, 43)
     #     print(fmap.shape)
@@ -292,7 +300,7 @@ class Solver(object):
 
         self.set_mode('train')
 
-    def gene_label(self):
+    def gene_label(self): # 输出预测的标签和真实的标签
         self.set_mode('eval')
         data_loader = self.data_loader['test']
         idx = 0
@@ -318,7 +326,7 @@ class Solver(object):
         print(file_name2, '保存完成')
 
 
-    def gene_probability(self):
+    def gene_probability(self): # 以softmax的形式输出prediction，可以用于画出ROC曲线
         self.set_mode('eval')
         data_loader = self.data_loader['test']
         idx = 0
@@ -344,71 +352,98 @@ class Solver(object):
         print(file_name1, '保存完成')
         print(file_name2, '保存完成')
 
+    def gan(self):
+        self.set_mode('train')
+        print(len(self.data_loader['train']))
+        for e in range(1, self.epoch + 1):  # e从1开始算起
+            self.global_epoch += 1
+            for batch_idx, (images, labels) in enumerate(self.data_loader['train']):
+                self.global_iter += 1
+                x = Variable(cuda(images, self.cuda))  # torch.Size([256, 1, 43, 43])
+                shape_0 = x.shape[0]
+                x = x.view(shape_0,-1)
+                predr = self.D(x)
+                lossr = -predr.mean()
+                # z = torch.randn(shape_0,1,self.pixel_width,self.pixel_width).cuda()
+                # z = z.view(shape_0,self.pixel_width**2)
+                z = x
+                xf = self.G(z).detach() # 输入到神经网络中向量的类型要是float，不能是Byte或者Int
+                predf = self.D(xf)
+                lossf = predf.mean()
+                # gp = gradient_penalty(self.D,xr=x,xf=xf.detach(),batch_size = shape_0)
+                gp = gradient_penalty(self.D,xr=x,xf=xf.detach(),batch_size = shape_0)
+                loss_D = lossr + lossf + 0.2 * gp
+                self.optim_D.zero_grad()
+                loss_D.backward()
+                self.optim_D.step()
+                if batch_idx and batch_idx % 5 == 0:
+                    z = torch.randn(shape_0, 1, self.pixel_width, self.pixel_width).cuda()
+                    z = transforms.Normalize((0.1307,), (0.3081,))(z)
+                    z = z.view(shape_0, self.pixel_width ** 2)
+                    # z = torch.randn(batch_size, 2).cuda()
+                    xf = self.G(z)
+                    predf = self.D(xf) # D的梯度是会去算的，也是有的，只是不对它进行更新就行
+                    # max predf.mean()
+                    loss_G = -predf.mean()
+                    # optimize
+                    self.optim_G.zero_grad()
+                    loss_G.backward()
+                    self.optim_G.step() # 对G网络进行更新
 
-    def generate(self, num_sample=100, target=-1, epsilon=0.03, alpha=2/255, iteration=1):
-
+                    if batch_idx % 500 == 0:
+                        logger.info('[{:03d}:{:05d}]'.format(self.global_epoch, batch_idx) + ' ' + 'loss D:{:.3f}, loss G:{:.3f}'.format(loss_D.data,loss_G.data))
+            if e >= 30:
+                self.save_wgan_checkpoint()
+                break
         self.set_mode('eval')
 
-        for e in range(1):#假设有5个epoch
-            self.global_epoch += 1
-            for batch_idx,(x_true,y_true) in enumerate(self.data_loader['train']):# x_true: [torch.FloatTensor of size 100x1x28x28]
-                self.global_iter += 1
-                y_target = None
-        #x_true, y_true = self.sample_data(num_sample)
-        #if isinstance(target, int) and (target in range(self.y_dim)): # range(10):[0,1,2,...,9]
-        #    '''
-        #    (Pdb) torch.LongTensor(3).fill_(10)
-        #    10
-        #    10
-        #    10
-        #    [torch.LongTensor of size 3]
-        #    '''
-        #    y_target = torch.LongTensor(y_true.size()).fill_(target)
-        #else:
-        #    y_target = None
-        ## y_target可能为None，也可能不为None
-                values = self.FGSM(x_true, y_true, y_target, epsilon, alpha, iteration)
-                # accuracy, cost, accuracy_adv, cost_adv = values
-                correct, cost = values
-                if batch_idx % 100 == 0:
-                    if self.print_:
-                        print()
-                        print(self.env_name)
-                        print('[{:03d}:{:03d}]'.format(self.global_epoch,batch_idx))
-                        print('acc:{:.3f} loss:{:.3f}'.format(correct,cost.data[0]))
+    def save_wgan_checkpoint(self, filename='wgan.tar'):  # 保存checkpoint
+        states = {
+            'G': self.G.state_dict(),
+            'G_optim':self.optim_G.state_dict()
+        }
+        file_path = self.ckpt_dir / filename
+        torch.save(states, file_path.open('wb+'))
+        logger.info("saved checkpoint'{}'(iter{})".format(file_path, self.global_iter))
 
-                    if self.tensorboard:
-                        self.tf.add_scalars(main_tag='performance/acc',
-                                            tag_scalar_dict={'train': correct},
-                                            global_step=self.global_iter)
-                        self.tf.add_scalars(main_tag='performance/error',
-                                            tag_scalar_dict={'train': 1 - correct},
-                                            global_step=self.global_iter)
-                        self.tf.add_scalars(main_tag='performance/cost',
-                                            tag_scalar_dict={'train': cost.data[0]},
-                                            global_step=self.global_iter)
-            self.test()
-        if self.tensorboard:
-            self.tf.add_scalars(main_tag='performance/best/acc',
-                                tag_scalar_dict={'test': self.history['acc']},
-                                global_step=self.history['iter'])
-        print(" [*] Generating Finished!")
+    def load_wgan_checkpoint(self, filename='wgan.tar'):
+        file_path = self.ckpt_dir / filename
+        if file_path.is_file():
+            print("=> loading checkpoint '{}'".format(file_path))
+            checkpoint = torch.load(file_path.open('rb'))
+            self.G.load_state_dict(checkpoint['G'])
+            self.optim_G.load_state_dict(checkpoint['G_optim'])
+            print("=> loaded checkpoint '{}'".format(file_path))
+        else:
+            print("=> no checkpoint found at '{}'".format(file_path))
 
-    def sample_data(self, num_sample=100):
+    def ganSamplerEnhancement(self):
+        self.load_wgan_checkpoint()
+        arrs_data = np.empty(shape=[0,self.pixel_width**2])
+        arrs_label = np.ndarray(0)
+        arrs_test_data = np.empty(shape=[0, self.pixel_width ** 2])
+        arrs_test_label = np.ndarray(0)
 
-        total = len(self.data_loader['test'].dataset)
-        '''
-        >>> torch.FloatTensor(10).uniform_(1,5).long()
-        tensor([1, 1, 2, 1, 3, 4, 1, 1, 4, 1])
-        '''
-        seed = torch.FloatTensor(num_sample).uniform_(1, total).long() # seed.shape: torch.Size([100]),等价于产生100个1到total(10000)之间的数值，如产生100个数，每个数的取值范围都是[1,10000]
-        x = torch.from_numpy(self.data_loader['test'].dataset.train_set[seed]) #  self.data_loader['test'].dataset.test_data[0:2], 2x28x28
-        #pdb.set_trace()
-        # [100x1x28x28],
-        # x = self.scale(x.float().unsqueeze(1).div(255)) #  x.float().unsqueeze(1).div(255), x.float().unsqueeze(1).div(255).mul(2).add(-1)
-        x = self.scale(x.float().div(255)) #  x.float().unsqueeze(1).div(255), x.float().unsqueeze(1).div(255).mul(2).add(-1)
-        y = torch.from_numpy(self.data_loader['test'].dataset.train_labels[seed]).long()# Tensor的类型设置为long
-        return x, y
+        for batch_idx, (images, labels) in enumerate(self.data_loader['train']):
+            images = images.cuda()
+            shape0 = images.shape[0]
+            images = images.view(shape0,-1)
+            output = self.G(images)
+
+            arrs_label = np.append(arrs_label, labels.numpy(),axis=0)
+            arrs_data = np.append(arrs_data, output.detach().cpu().numpy(), axis=0)
+        np.save('./datasets/ARRAY/data.npy',arrs_data)
+        np.save('./datasets/ARRAY/label.npy',arrs_label)
+
+        for batch_idx, (images, labels) in enumerate(self.data_loader['test']):
+            images = images.cuda()
+            shape0 = images.shape[0]
+            images = images.view(shape0, -1)
+            output = self.G(images)
+            arrs_test_label = np.append(arrs_test_label, labels.numpy(), axis=0)
+            arrs_test_data = np.append(arrs_test_data, output.detach().cpu().numpy(), axis=0)
+        np.save('./datasets/ARRAY/data_test.npy', arrs_test_data)
+        np.save('./datasets/ARRAY/label_test.npy', arrs_test_label)
 
     def save_checkpoint(self, filename='ckpt.tar'):# 保存checkpoint
         model_states = {

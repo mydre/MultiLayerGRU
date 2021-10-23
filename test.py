@@ -34,18 +34,14 @@ def main(args):
         net.train(args)
     elif args.mode == 'test':
         net.test()
-    elif args.mode == 'gene_label':
+    elif args.mode == 'gene_label': # 产生预测的标签值和实际的标签值
         net.gene_label()
-    elif args.mode == 'gene_probability':
+    elif args.mode == 'gene_probability': # 生成画ROC曲线时会用到了原材料,即实际的标签值，即各个类别对应的softmax列向量
         net.gene_probability()
-    elif args.mode == 'generate':
-        net.generate(num_sample=args.batch_size,
-                     target=args.target,
-                     epsilon=args.epsilon,
-                     alpha=args.alpha,
-                     iteration=args.iteration)
-    elif args.mode == 'universal':
-        net.universal(args)
+    elif args.mode == 'wgan': # 训练wgan模型
+        net.gan()
+    elif args.mode == 'enhancement': # mnist向量输入到wgan模型的生成器中进行训练接样本增强
+        net.ganSamplerEnhancement()
     else: return
 
     print('[*] Finished')
@@ -73,7 +69,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='hahahahhahahhh')
     parser.add_argument('--epoch', type=int, default=50, help='epoch size')
     parser.add_argument('--batch_size', type=int, default=128, help='mini-batch size')
-    parser.add_argument('--lr', type=float, default=2e-3, help='learning rate')
+    # parser.add_argument('--lr', type=float, default=2e-3, help='learning rate')
+    parser.add_argument('--lr', type=float, default=2e-6, help='learning rate')
     parser.add_argument('--y_dim', type=int, default=2, help='the number of classes')
     parser.add_argument('--target', type=int, default=-1, help='target class for targeted generation')
     parser.add_argument('--env_name', type=str, default='main', help='experiment name')

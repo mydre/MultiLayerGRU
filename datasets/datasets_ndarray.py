@@ -14,47 +14,41 @@ class UnknownDatasetError(Exception):
     def __str__(self):
         return "unknown datasets error"
 
-class MyDataSet(Dataset):
+class MyDataSetArray(Dataset):
     '''
     读取数据、初始化数据
     '''
-    def __init__(self,folder,data_name,label_name,p_width,transform=None):
-        (train_set,train_labels) = load_data(folder,data_name,label_name,p_width)
-        self.train_set = train_set
-        self.train_labels = train_labels
+    def __init__(self,folder,data_name,label_name,p_width):
+        (data,label) = load_data(folder,data_name,label_name,p_width)
+        self.data= data
+        self.label = label
         self.p_width = p_width
-        self.transform = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.1307,),(0.3081,)),])
 
     def __getitem__(self,index):#返回的是单个item（如一个图片）
-        img,target = self.train_set[index],int(self.train_labels[index])
-        #img = torch.from_numpy(img)
-        #img = img.float().div(255).mul(2).add(-1)
-        img = self.transform(img)
-        img = img.view(1,self.p_width,self.p_width)
+        img,target = self.data[index],int(self.label[index])
+        img = img.reshape(-1,self.p_width,self.p_width)
+        # img = img.view(1,self.p_width,self.p_width)
         return img,target
 
     def __len__(self):
-        return len(self.train_set)
+        return len(self.data)
 
 
-def load_data(data_folder,data_name,label_name,p_width):
+def load_data(folder,data_name,label_name,p_width):
     '''
     data_folder:文件目录
     data_name:数据文件名
     label_name: 标签数据文件名
     '''
-    with gzip.open(os.path.join(data_folder,label_name),'rb') as lbpath:
-        y_train = np.frombuffer(lbpath.read(),np.uint8,offset=8) # 偏移8个字节
+    data = np.load(os.path.join(folder,data_name))
+    label = np.load(os.path.join(folder,label_name))
 
-    with gzip.open(os.path.join(data_folder,data_name),'rb') as imgpath:
-        x_train = np.frombuffer(imgpath.read(),np.uint8,offset=16).reshape((-1,1,p_width,p_width)) # 偏移16个字节
-
-    return (x_train,y_train)
+    return (data,label)
 
 
-def return_data2(args):
-    trainDataset = MyDataSet('datasets/MNIST/','train-images-idx3-ubyte.gz','train-labels-idx1-ubyte.gz',args.pixel_width)
-    testDataset = MyDataSet('datasets/MNIST/','t10k-images-idx3-ubyte.gz','t10k-labels-idx1-ubyte.gz',args.pixel_width)
+def return_data(args):
+    trainDataset = MyDataSetArray('datasets/ARRAY/','data.npy','label.npy',args.pixel_width)
+    testDataset = MyDataSetArray('datasets/ARRAY/','data_test.npy','label_test.npy',args.pixel_width)
     batch_size = args.batch_size
     # train_loader
     train_loader = DataLoader(

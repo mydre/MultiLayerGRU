@@ -7,11 +7,6 @@ import torch.optim as optim
 import random
 import torch.autograd as autograd
 
-hidden_dim = 400
-batch_size = 512
-# viz = visdom.Visdom()
-
-
 class Generator(nn.Module):
     def __init__(self,data_dim,hidden_dim):
         super(Generator,self).__init__()
@@ -87,7 +82,7 @@ def data_generator():
         dataset /= 1.414 # 每次yield一个batch
         yield dataset # 使用yield实现一个无线的数据生成器
 
-def gradient_penalty(D,xr,xf):
+def gradient_penalty(D,xr,xf,batch_size):
     """
     :param D:
     :param xr: [b,2]
@@ -99,9 +94,8 @@ def gradient_penalty(D,xr,xf):
     t = t.expand_as(xr) # expand_as把一个向量扩展成另一个向量的维度
     mid = t * xr + (1-t) * xf
     # set it requires gradient
-    mid.requires_grad()
+    mid.requires_grad = True
     pred = D(mid)
-
     # 二次求导时用到create_graph,retain_graph
     grads = autograd.grad(outputs=pred,inputs=mid, grad_outputs=torch.ones_like(pred),
                           create_graph=True,retain_graph=True,only_inputs=True)[0]  # 对x冒求导
@@ -109,61 +103,61 @@ def gradient_penalty(D,xr,xf):
     gp = torch.pow((grads.norm(2, dim=1)-1),2).mean()
     return gp
 
-def main():
-    torch.manual_seed(23)
-    np.random.seed(23)
-
-    data_iter = data_generator()
-
-    G = Generator().cuda()
-    D = Discriminator().cuda()
-    print(G)
-    print(D)
-    optim_G = optim.Adam(G.parameters(),lr=5e-4,betas=(0.5,0.9))
-    optim_D = optim.Adam(D.parameters(),lr=5e-4,betas=(0.5,0.9))
-
-    for epoch in range(50000):
-        # 1. train Discriminator firstly
-        for _ in range(5):
-            # 1.1 train on real data
-            xr = next(data_iter)
-            xr = torch.from_numpy(xr).cuda()
-            predr = D(xr)
-            # max predr, min lossr
-            lossr = -predr.mean()
-            # 1.2 train on fake data
-            # [b,]
-            z = torch.randn(batch_size,2).cuda()
-            # 这里优化Descriminator，所有Genenator的梯度是不需要更新的
-            xf = G(z).detach() # 类似于 tf.stop_gradient()
-            predf = D(xf)
-            lossf = predf.mean()
-
-            # 1.3 gradient penalty
-            gp = gradient_penalty(D,xr,xf.detach()) # 由于不需要对G求导，所以对xf进行detach
-            # aggregate all
-            loss_D = lossr + lossf + 0.2 * gp
-
-            # optimize
-            optim_D.zero_grad()
-            loss_D.backward()
-            optim_D.step()
-
-        # 2. train Generator
-        z = torch.randn(batch_size,2).cuda()
-        xf = G(z)
-        predf = D(xf)
-        # max predf.mean()
-        loss_G = -predf.mean()
-
-        # optimize
-        optim_G.zero_grad()
-        loss_G.backward()
-        optim_G.step()
-
-        if epoch % 100 == 0:
-            print(loss_D.item(),loss_G.item())
-
-
-if __name__ == '__main__':
-    main()
+# def main():
+#     torch.manual_seed(23)
+#     np.random.seed(23)
+#
+#     data_iter = data_generator()
+#
+#     G = Generator().cuda()
+#     D = Discriminator().cuda()
+#     print(G)
+#     print(D)
+#     optim_G = optim.Adam(G.parameters(),lr=5e-4,betas=(0.5,0.9))
+#     optim_D = optim.Adam(D.parameters(),lr=5e-4,betas=(0.5,0.9))
+#
+#     for epoch in range(50000):
+#         # 1. train Discriminator firstly
+#         for _ in range(5):
+#             # 1.1 train on real data
+#             xr = next(data_iter)
+#             xr = torch.from_numpy(xr).cuda()
+#             predr = D(xr)
+#             # max predr, min lossr
+#             lossr = -predr.mean()
+#             # 1.2 train on fake data
+#             # [b,]
+#             z = torch.randn(batch_size,2).cuda()
+#             # 这里优化Descriminator，所有Genenator的梯度是不需要更新的
+#             xf = G(z).detach() # 类似于 tf.stop_gradient()
+#             predf = D(xf)
+#             lossf = predf.mean()
+#
+#             # 1.3 gradient penalty
+#             gp = gradient_penalty(D,xr,xf.detach()) # 由于不需要对G求导，所以对xf进行detach
+#             # aggregate all
+#             loss_D = lossr + lossf + 0.2 * gp
+#
+#             # optimize
+#             optim_D.zero_grad()
+#             loss_D.backward()
+#             optim_D.step()
+#
+#         # 2. train Generator
+#         z = torch.randn(batch_size,2).cuda()
+#         xf = G(z)
+#         predf = D(xf)
+#         # max predf.mean()
+#         loss_G = -predf.mean()
+#
+#         # optimize
+#         optim_G.zero_grad()
+#         loss_G.backward()
+#         optim_G.step()
+#
+#         if epoch % 100 == 0:
+#             print(loss_D.item(),loss_G.item())
+#
+#
+# if __name__ == '__main__':
+#     main()

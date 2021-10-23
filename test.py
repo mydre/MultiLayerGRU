@@ -74,7 +74,7 @@ if __name__ == "__main__":
     parser.add_argument('--epoch', type=int, default=50, help='epoch size')
     parser.add_argument('--batch_size', type=int, default=128, help='mini-batch size')
     parser.add_argument('--lr', type=float, default=2e-3, help='learning rate')
-    parser.add_argument('--y_dim', type=int, default=2, help='the number of classes')
+    parser.add_argument('--y_dim', type=int, default=5, help='the number of classes')
     parser.add_argument('--target', type=int, default=-1, help='target class for targeted generation')
     parser.add_argument('--env_name', type=str, default='main', help='experiment name')
     parser.add_argument('--eps', type=float, default=1e-9, help='epsilon')

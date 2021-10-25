@@ -23,11 +23,12 @@ class MyDataSetArray(Dataset):
         self.data= data
         self.label = label
         self.p_width = p_width
+        self.transform = transforms.Compose([transforms.ToTensor()])
 
     def __getitem__(self,index):#返回的是单个item（如一个图片）
         img,target = self.data[index],int(self.label[index])
-        img = img.reshape(-1,self.p_width,self.p_width)
-        # img = img.view(1,self.p_width,self.p_width)
+        img = torch.from_numpy(img)
+        img = img.view(-1,self.p_width,self.p_width)
         return img,target
 
     def __len__(self):

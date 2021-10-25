@@ -34,7 +34,6 @@ class Solver(object):
         self.y_dim = args.y_dim
         self.target = args.target
         self.dataset = args.dataset
-        # self.data_loader = return_data(args)
         self.data_loader = return_data2(args)
         self.data_loader_gan = return_data(args)
         self.global_epoch = 0
@@ -114,7 +113,6 @@ class Solver(object):
         cost = F.cross_entropy(h_adv,y)
         return cost
 
-
     def interleave(self,xy, batch):
         def interleave_offsets(batch, nu):
             groups = [batch // (nu + 1)] * (nu + 1)
@@ -147,22 +145,16 @@ class Solver(object):
 
         return Lx, Lu, 75 * self.linear_rampup(epoch)
 
-    
     def train(self,args):
         self.set_mode('train')
         lr = args.lr
-        print(len(self.data_loader['train']))
         for e in range(1,self.epoch+1): # e从1开始算起
-
             self.global_epoch += 1
-            for batch_idx, (images, labels) in enumerate(self.data_loader['train']):
-
+            # for batch_idx, (images, labels) in enumerate(self.data_loader['train']):
+            for batch_idx, (images, labels) in enumerate(self.data_loader_gan['train']): # 能不能换个数据集进行训练？
                 self.global_iter += 1
-
                 x = Variable(cuda(images, self.cuda)) # torch.Size([256, 1, 43, 43])
                 y = Variable(cuda(labels, self.cuda)) # torch.Size([256])
-                # x = torch.autograd.Variable(cuda(images, self.cuda))
-                # y = torch.autograd.Variable(cuda(labels, self.cuda))
                 '''
                 经过net处理之后得到一个10分类的输出,logit.shape:[100,10]，所以一个batch有100个样本
                 logit[0] == [0.0545  0.1646  0.0683 -0.1407  0.0031  0.0560 -0.1895 -0.0183  0.0158  0.0183】
@@ -188,35 +180,16 @@ class Solver(object):
                 # logit.max(1)[1]其中(1)表示行的最大值，[0]表示最大的值本身,[1]表示最大的那个值在该行对应的index
                 # soft_logit = F.softmax(logit)
                 soft_logit = logit
-
                 prediction = soft_logit.max(1)[1] # prediction.shape: torch.Size([100]),此时，y == [1,2,1,1,1,3,5...],prediction也是类似的形式
                 correct = torch.eq(prediction, y).float().mean() # 先转换为flotaTensor，然后[0]取出floatTensor中的值：0.11999999731779099
-                # out = self._arcface(logit,y)
-                # cost = F.cross_entropy(logit, y) # cost也是一个Variable,计算出的cost是一个损失
-
                 loss_ = F.cross_entropy(soft_logit, y) # cost也是一个Variable,计算出的cost是一个损失
-                # cost = F.cross_entropy(out, y) # cost也是一个Variable,计算出的cost是一个损失
-
-                # lds = self.at_loss(x,y)
-                # loss_lds = self.at_loss(x,y)
-                # cost = loss_ + loss_lds + loss
-                # cost = loss
-                # cost = loss_ + loss_lds
-                # cost = loss_ + loss
-                # cost = loss_ + loss + loss_lds
-                # cost = loss_lds
                 cost = loss_
                 self.optim.zero_grad()
                 cost.backward()  # 反向传播之后可以进行参数的更新,反向传播的是那个网络，更新的就是哪个网络的参数
                 self.optim.step()
                 if batch_idx % 500 == 0:
                     if self.print_:
-                        # print()
-                        # print(self.env_name)
                         logger.info('[{:03d}:{:05d}]'.format(self.global_epoch, batch_idx) + '  ' + 'acc:{:.3f} loss:{:.3f}'.format(correct, cost.data))
-                        # print('[{:03d}:{:03d}]'.format(self.global_epoch, batch_idx))
-                        # print('acc:{:.3f} loss:{:.3f}'.format(correct, cost.data))
-
                     if self.tensorboard:
                         self.tf.add_scalars(main_tag='performance/acc',
                                             tag_scalar_dict={'train':correct},
@@ -246,7 +219,7 @@ class Solver(object):
         cost = 0.
         total = 0.
 
-        data_loader = self.data_loader['test']
+        data_loader = self.data_loader['test'] # 可以直接使用mnist格式的数据集
         idx = 0
         for images, labels in data_loader:# 相当于测试的时候也是和训练的时候一样直接通过迭代器取出来的值
             idx += 1
@@ -270,11 +243,6 @@ class Solver(object):
 
 
         if self.print_:
-            # print()
-            # print('[{:03d}]\nTEST RESULT'.format(self.global_epoch))
-            # print('ACC:{:.4f}'.format(accuracy))
-            # print('*TOP* ACC:{:.4f} at e:{:03d}, COST:{:.4f}'.format(accuracy, self.global_epoch,cost))
-            # print()
             logger.info('[{:03d}] TEST RESULT'.format(self.global_epoch) + ' ' + 'ACC:{:.4f}'.format(accuracy) + ' ' +'*TOP* ACC:{:.4f} at e:{:03d}, COST:{:.4f}'.format(accuracy, self.global_epoch,cost))
 
             if self.tensorboard:
@@ -350,7 +318,12 @@ class Solver(object):
         print(file_name1, '保存完成')
         print(file_name2, '保存完成')
 
-    def gan(self):
+    # 第1步，训练gan模型
+    # python test.py --mode wgan --epoch 100000 --filename 'wgan.tar',训练gan模型,需要制定保存gan模型的文件名（对应类别4）
+    # 对应的输入数据是指定类别的mnist格式数据集
+    # python test.py - -mode wgan - -epoch 20000 - -filename 'wgan_3.tar,（对应类别3）
+    # epoch指定训练的轮数
+    def gan(self,filename):
         self.set_mode('train')
         print(len(self.data_loader['train']))
         for e in range(1, self.epoch + 1):  # e从1开始算起
@@ -362,9 +335,12 @@ class Solver(object):
                 x = x.view(shape_0,-1)
                 predr = self.D(x)
                 lossr = -predr.mean()
+
                 # z = torch.randn(shape_0,1,self.pixel_width,self.pixel_width).cuda()
                 # z = z.view(shape_0,self.pixel_width**2)
-                z = x
+                z = torch.randn(shape_0, self.pixel_width**2).cuda()
+                # z = x
+
                 xf = self.G(z).detach() # 输入到神经网络中向量的类型要是float，不能是Byte或者Int
                 predf = self.D(xf)
                 lossf = predf.mean()
@@ -374,25 +350,27 @@ class Solver(object):
                 self.optim_D.zero_grad()
                 loss_D.backward()
                 self.optim_D.step()
-                if batch_idx and batch_idx % 5 == 0:
-                    z = torch.randn(shape_0, 1, self.pixel_width, self.pixel_width).cuda()
-                    z = transforms.Normalize((0.1307,), (0.3081,))(z)
-                    z = z.view(shape_0, self.pixel_width ** 2)
-                    # z = torch.randn(batch_size, 2).cuda()
+            if e % 5 == 0:
+                lossD = loss_D
+                lossG = loss_D
+                for batch_idx, (images, labels) in enumerate(self.data_loader['train']):
+                    shape_0 = images.shape[0]
+                    z = torch.randn(shape_0, self.pixel_width**2).cuda()
                     xf = self.G(z)
                     predf = self.D(xf) # D的梯度是会去算的，也是有的，只是不对它进行更新就行
                     # max predf.mean()
                     loss_G = -predf.mean()
+                    lossG = loss_G
                     # optimize
                     self.optim_G.zero_grad()
                     loss_G.backward()
                     self.optim_G.step() # 对G网络进行更新
 
-                    if batch_idx % 500 == 0:
-                        logger.info('[{:03d}:{:05d}]'.format(self.global_epoch, batch_idx) + ' ' + 'loss D:{:.3f}, loss G:{:.3f}'.format(loss_D.data,loss_G.data))
-            if e >= 30:
-                self.save_wgan_checkpoint()
-                break
+                if e % 50 == 0:
+                    logger.info('[{:03d}]'.format(e) + ' ' + 'loss D:{:.3f}, loss G:{:.3f}'.format(lossD.data,lossG.data))
+            # if e >= 30:
+        self.save_wgan_checkpoint(filename=filename)
+            #     break
         self.set_mode('eval')
 
     def save_wgan_checkpoint(self, filename='wgan.tar'):  # 保存checkpoint
@@ -415,33 +393,64 @@ class Solver(object):
         else:
             print("=> no checkpoint found at '{}'".format(file_path))
 
-    def ganSamplerEnhancement(self):
-        self.load_wgan_checkpoint()
+    # 第2步，使用Generator生成样本
+    # 使用训练好的gan模型生成样本，指定gan模型文件名
+    # 对应的输入数据是指定类别的mnist格式数据集
+    # python test.py --mode enhancement --epoch 100 --filename 'wgan.tar',epoch指定数据增强的轮数(对应类别为4)
+    # python test.py - -mode enhancement - -epoch 10 - -filename 'wgan_3.tar',(对应类别为3)
+    # 使用gan对指定类别的训练集进行增强
+    def ganSamplerEnhancement(self,filename):
+        self.load_wgan_checkpoint(filename=filename)
         arrs_data = np.empty(shape=[0,self.pixel_width**2])
         arrs_label = np.ndarray(0)
-        arrs_test_data = np.empty(shape=[0, self.pixel_width ** 2])
-        arrs_test_label = np.ndarray(0)
+        for e in range(self.epoch):
+            for batch_idx, (images, labels) in enumerate(self.data_loader['train']):
+                shape_0 = images.shape[0]
+                z = torch.randn(shape_0,self.pixel_width**2).cuda()
+                output = self.G(z)
+                arrs_label = np.append(arrs_label, labels.numpy(),axis=0)
+                arrs_data = np.append(arrs_data, output.detach().cpu().numpy(), axis=0)
+        np.save('./datasets/ARRAY/data_{0}.npy'.format(labels[0]),arrs_data)
+        np.save('./datasets/ARRAY/label_{0}.npy'.format(labels[0]),arrs_label)
+        print('train set saved to file')
 
-        for batch_idx, (images, labels) in enumerate(self.data_loader['train']):
-            images = images.cuda()
+    # 第3步，合并数据
+    def merge_data(self):
+        '''
+        合并mnist数据集和增强之后的训练集
+        :return:
+        '''
+        arrs_data = np.empty(shape=[0,self.pixel_width**2])
+        arrs_label = np.ndarray(0)
+        arrs_data_test = np.empty(shape = [0,self.pixel_width**2])
+        arrs_label_test = np.ndarray(0)
+        for batch_idx,(images, labels) in enumerate(self.data_loader['train']): # mnist训练集
             shape0 = images.shape[0]
-            images = images.view(shape0,-1)
-            output = self.G(images)
-
+            images = images.view(shape0,self.pixel_width**2)
+            arrs_data = np.append(arrs_data, images.numpy(),axis=0)
             arrs_label = np.append(arrs_label, labels.numpy(),axis=0)
-            arrs_data = np.append(arrs_data, output.detach().cpu().numpy(), axis=0)
-        np.save('./datasets/ARRAY/data.npy',arrs_data)
-        np.save('./datasets/ARRAY/label.npy',arrs_label)
-
-        for batch_idx, (images, labels) in enumerate(self.data_loader['test']):
-            images = images.cuda()
+        for batch_idx,(images, labels) in enumerate(self.data_loader['test']): # mnist测试集
             shape0 = images.shape[0]
-            images = images.view(shape0, -1)
-            output = self.G(images)
-            arrs_test_label = np.append(arrs_test_label, labels.numpy(), axis=0)
-            arrs_test_data = np.append(arrs_test_data, output.detach().cpu().numpy(), axis=0)
-        np.save('./datasets/ARRAY/data_test.npy', arrs_test_data)
-        np.save('./datasets/ARRAY/label_test.npy', arrs_test_label)
+            images = images.view(shape0, self.pixel_width ** 2)
+            arrs_data_test = np.append(arrs_data_test, images.numpy(), axis=0)
+            arrs_label_test = np.append(arrs_label_test, labels.numpy(), axis=0)
+        # 先保存测试集，这个不需要增添数据
+        np.save('./datasets/ARRAY/data_test.npy',arrs_data_test)
+        np.save('./datasets/ARRAY/label_test.npy',arrs_label_test)
+        print('测试集保存成功')
+        # 再保存训练集，这个需要增添数据
+        train_data_4 = np.load('./datasets/ARRAY/data_4.npy')
+        train_label_4 = np.load('./datasets/ARRAY/label_4.npy')
+        train_data_3 = np.load('./datasets/ARRAY/data_3.npy')
+        train_label_3 = np.load('./datasets/ARRAY/label_3.npy')
+        arrs_data = np.append(arrs_data, train_data_4,axis=0)
+        arrs_data = np.append(arrs_data, train_data_3,axis=0)
+        arrs_label = np.append(arrs_label, train_label_4, axis=0)
+        arrs_label = np.append(arrs_label, train_label_3, axis=0)
+        print('训练集merge成功')
+        np.save('./datasets/ARRAY/data.npy', arrs_data)
+        np.save('./datasets/ARRAY/label.npy',arrs_label)
+        print('训练集保存成功')
 
     def save_checkpoint(self, filename='ckpt.tar'):# 保存checkpoint
         model_states = {

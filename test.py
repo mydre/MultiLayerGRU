@@ -39,9 +39,11 @@ def main(args):
     elif args.mode == 'gene_probability': # 生成画ROC曲线时会用到了原材料,即实际的标签值，即各个类别对应的softmax列向量
         net.gene_probability()
     elif args.mode == 'wgan': # 训练wgan模型
-        net.gan()
+        net.gan(args.filename)
     elif args.mode == 'enhancement': # mnist向量输入到wgan模型的生成器中进行训练接样本增强
-        net.ganSamplerEnhancement()
+        net.ganSamplerEnhancement(args.filename)
+    elif args.mode == 'merge_data':
+        net.merge_data()
     else: return
 
     print('[*] Finished')
@@ -70,8 +72,9 @@ if __name__ == "__main__":
     parser.add_argument('--epoch', type=int, default=50, help='epoch size')
     parser.add_argument('--batch_size', type=int, default=128, help='mini-batch size')
     parser.add_argument('--lr', type=float, default=2e-3, help='learning rate')
-    parser.add_argument('--y_dim', type=int, default=5, help='the number of classes')
+    # gan模型训练的时候的learning rate是2e-6
     # parser.add_argument('--lr', type=float, default=2e-6, help='learning rate')
+    parser.add_argument('--y_dim', type=int, default=5, help='the number of classes')
     parser.add_argument('--target', type=int, default=-1, help='target class for targeted generation')
     parser.add_argument('--env_name', type=str, default='main', help='experiment name')
     parser.add_argument('--eps', type=float, default=1e-9, help='epsilon')
@@ -93,6 +96,7 @@ if __name__ == "__main__":
     parser.add_argument('--visdom', type=str2bool, default=False, help='enable visdom')
     parser.add_argument('--visdom_port', type=str, default=55558, help='visdom port')
     parser.add_argument('--desc', type=str, default='', help='the describe of generated Label')
+    parser.add_argument('--filename', type=str, default='', help='the filename of wgan model')
     args = parser.parse_args()
 
     main(args)

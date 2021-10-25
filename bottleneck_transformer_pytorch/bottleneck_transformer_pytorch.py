@@ -436,7 +436,7 @@ class ReshapeNet3(nn.Module):
     h_n :[D * NL, N, HD]
 '''
 class MyGruNet(nn.Module):
-    def __init__(self,*,y_dim,num_steps,input_size,hidden_size = 64,num_layer = 2,is_bidirectional = True):
+    def __init__(self,*,y_dim,num_steps,input_size,hidden_size = 64,num_layer = 3,is_bidirectional = True):
         super().__init__()
         self.IP = input_size # self.IP表示input_size
         self.L= num_steps # self.L表示num_stes
@@ -451,11 +451,17 @@ class MyGruNet(nn.Module):
         self._sof = nn.Softmax()
 
         self.linear1 = nn.Linear(self.D * self.L * self.HD, 64)
+        self.relu1 = nn.ReLU()
         self.linear4 = nn.Linear(64, 32)
+        self.relu4 = nn.ReLU()
         self.linear2 = nn.Linear(32, 16)
+        self.relu2 = nn.ReLU()
         self.linear5 = nn.Linear(16, 8)
+        self.relu5 = nn.ReLU()
         self.linear3 = nn.Linear(8, y_dim)
-        self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1, self.linear4, self.linear2, self.linear5,self.linear3)
+        self.relu3 = nn.ReLU()
+        # self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1,self.relu1, self.linear4,self.relu4,self.linear2,self.relu2, self.linear5,self.relu5,self.linear3,self.relu3)
+        self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1, self.linear4,self.linear2,self.linear5,self.linear3)
 
     def forward(self,input):
         # input shape格式：[L,N,IP]，即[num_steps,batch,input_size]
@@ -464,5 +470,6 @@ class MyGruNet(nn.Module):
         # output:[19,128,1 * 256], h_n: [1 * 1, 128, 256]
         #    _,h_n = self.gru(input)
         #    h_n = h_n.view(-1,self.D * self.NL * self.HD)
+        input = input.float()
         out = self.net_stackOne(input)
         return out

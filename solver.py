@@ -88,9 +88,8 @@ class Solver(object):
 
     def model_init(self):
         # 使用bottleneck
-        self.net = cuda(BottleStack(dim=1,fmap_size=self.pixel_width,dim_out=8,proj_factor=4,downsample=True,heads=4,dim_head=8,rel_pos_emb=False, y_dim=self.y_dim), self.cuda)
-        # self.net = cuda(MyGruNet(y_dim = self.y_dim,pixel_width=self.pixel_width),self.cuda)
-
+        # self.net = cuda(BottleStack(dim=1,fmap_size=self.pixel_width,dim_out=8,proj_factor=4,downsample=True,heads=4,dim_head=8,rel_pos_emb=False, y_dim=self.y_dim), self.cuda)
+        self.net = cuda(MyGruNet(y_dim = self.y_dim,num_steps=self.pixel_width,input_size=self.pixel_width),self.cuda)
         # Optimizers
         # self.optim = optim.Adam([{'params':self.net.parameters(), 'lr':self.lr}],betas=(0.5, 0.999))
         self.optim = optim.Adam([{'params':self.net.parameters(), 'lr':self.lr}])

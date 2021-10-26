@@ -449,8 +449,6 @@ class MyGruNet(nn.Module):
 
         self._reshape2 = ReshapeNet2(self.L)
         self._reshape3 = ReshapeNet3(self.D,self.L,self.HD,self.NL)
-        self._sig = nn.ReLU()
-        self._sof = nn.Softmax()
 
         # self.linear1 = nn.Linear(self.D * self.L * self.HD, 64)
         self.linear1 = nn.Linear(self.D * self.L * self.HD, 64)

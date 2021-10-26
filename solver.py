@@ -107,7 +107,7 @@ class Solver(object):
         cost = F.cross_entropy(h_adv,y)
         self.optim.zero_grad()
         cost.backward()# 第一步反向传播求得梯度
-        x_adv = x_adv - 0.03 * x_adv.grad#第二步根据梯度进行x值的更新
+        x_adv = x_adv - 1e-6 * x_adv.grad#第二步根据梯度进行x值的更新
         x_adv2 = Variable(x_adv.data,requires_grad=True)
         h_adv = self.net(x_adv2)
         cost = F.cross_entropy(h_adv,y)
@@ -150,13 +150,54 @@ class Solver(object):
         lr = args.lr
         for e in range(1,self.epoch+1): # e从1开始算起
             self.global_epoch += 1
-            # for batch_idx, (images, labels) in enumerate(self.data_loader['train']):
-            for batch_idx, (images, labels) in enumerate(self.data_loader_gan['train']): # 能不能换个数据集进行训练？
+            for batch_idx, (images, labels) in enumerate(self.data_loader['train']):
+                try:
+                    inputs_u, _ = unlabel_train_iter.next()  # images和inuts_u的shape是[64,1,28,28]
+                except Exception as mye:
+                    unlabel_train_iter = iter(self.data_loader['un_label'])
+                    inputs_u, _ = unlabel_train_iter.next()
                 self.global_iter += 1
-                x = Variable(cuda(images, self.cuda)) # torch.Size([256, 1, 43, 43])
-                y = Variable(cuda(labels, self.cuda)) # torch.Size([256])
+                batch_size = images.size(0)
+                targets_x = torch.zeros(batch_size, self.y_dim).scatter_(1, labels.view(-1, 1).long(), 1)
+                targets_x = Variable(cuda(targets_x, self.cuda))
+
+                x = Variable(cuda(images, self.cuda))
+                y = Variable(cuda(labels, self.cuda))
+                inputs_u = Variable(cuda(inputs_u, self.cuda))  # 变为在cuda上执行的变量
+                # x = x.view(args.batch_size, 1, args.pixel_width ** 2)
+                x = x.view(-1, 1, args.pixel_width ** 2)
+                inputs_u = inputs_u.view(args.batch_size, 1, args.pixel_width ** 2)
+                with torch.no_grad():
+                    outputs_u = self.net(inputs_u)
+                    p = F.softmax(outputs_u, dim=1)
+                    pt = p ** 2
+                    targets_u = pt / pt.sum(dim=1, keepdim=True)
+                    targets_u = targets_u.detach()
+                # 1.构造all_inputs和all_targets
+                all_inputs = torch.cat([x, inputs_u], dim=0)  # shape:[128,1,784]
+                all_targets = torch.cat([targets_x, targets_u], dim=0)  # shape:[128,12]
+                l = np.random.beta(0.75, 0.75)
+                l = max(l, 1 - l)
+                idx = torch.randperm(all_inputs.size(0))
+                # 2.构造输入inputs_a和inputs_b
+                input_a, input_b = all_inputs, all_inputs[idx]
+                target_a, target_b = all_targets, all_targets[idx]  # all_targets[idx]通过索引数组即idx来选择特定的元素
+                l = 0.8
+                # 3.构造mixed_input和mixed_target
+                mixed_input = l * input_a + (1 - l) * input_b
+                mixed_target = l * target_a + (1 - l) * target_b
+                # 4.在批次之间交错标记和未标记的样品，以获得正确的批次规范计算
+                mixed_input = list(torch.split(mixed_input, batch_size))
+                mixed_input = self.interleave(mixed_input, batch_size)
+                logits = [self.net(mixed_input[0])]
+                logits.append(self.net(mixed_input[1]))
+                logits = self.interleave(logits, batch_size)
+                logits_x = logits[0]  # [64,num_class]
+                logits_u = logits[1]
+                Lx, Lu, w = self.semi_loss(logits_x, mixed_target[:batch_size], logits_u, mixed_target[batch_size:],e + batch_idx / len(self.data_loader['train']))
+                loss = Lx + w * Lu
                 '''
-                经过net处理之后得到一个10分类的输出,logit.shape:[100,10]，所以一个batch有100个样本
+                经过toynet处理之后得到一个10分类的输出,logit.shape:[100,10]，所以一个batch有100个样本
                 logit[0] == [0.0545  0.1646  0.0683 -0.1407  0.0031  0.0560 -0.1895 -0.0183  0.0158  0.0183】
                 '''
                 logit = self.net(x)
@@ -178,27 +219,38 @@ class Solver(object):
                 >>>
                 '''
                 # logit.max(1)[1]其中(1)表示行的最大值，[0]表示最大的值本身,[1]表示最大的那个值在该行对应的index
-                # soft_logit = F.softmax(logit)
-                soft_logit = logit
-                prediction = soft_logit.max(1)[1] # prediction.shape: torch.Size([100]),此时，y == [1,2,1,1,1,3,5...],prediction也是类似的形式
-                correct = torch.eq(prediction, y).float().mean() # 先转换为flotaTensor，然后[0]取出floatTensor中的值：0.11999999731779099
-                loss_ = F.cross_entropy(soft_logit, y) # cost也是一个Variable,计算出的cost是一个损失
+                prediction = logit.max(1)[1]  # prediction.shape: torch.Size([100]),此时，y == [1,2,1,1,1,3,5...],prediction也是类似的形式
+                correct = torch.eq(prediction,y).float().mean().item()  # 先转换为flotaTensor，然后[0]取出floatTensor中的值：0.11999999731779099
+                # out = self._arcface(logit,y)
+                # cost = F.cross_entropy(logit, y) # cost也是一个Variable,计算出的cost是一个损失
+                loss_ = F.cross_entropy(logit, y)  # cost也是一个Variable,计算出的cost是一个损失
+                # cost = F.cross_entropy(out, y) # cost也是一个Variable,计算出的cost是一个损失
+
+                # lds = self.at_loss(x,y)
+                # loss_lds = self.at_loss(x, y)
+                # cost = loss_ + loss
                 cost = loss_
+
                 self.optim.zero_grad()
-                cost.backward()  # 反向传播之后可以进行参数的更新,反向传播的是那个网络，更新的就是哪个网络的参数
+                cost.backward()
                 self.optim.step()
                 if batch_idx % 500 == 0:
                     if self.print_:
                         logger.info('[{:03d}:{:05d}]'.format(self.global_epoch, batch_idx) + '  ' + 'acc:{:.3f} loss:{:.3f}'.format(correct, cost.data))
+                        # print()
+                        # print(self.env_name)
+                        # print('[{:03d}:{:03d}]'.format(self.global_epoch, batch_idx))
+                        # print('acc:{:.3f} loss:{:.3f}'.format(correct, cost.data[0]))
+
                     if self.tensorboard:
                         self.tf.add_scalars(main_tag='performance/acc',
-                                            tag_scalar_dict={'train':correct},
+                                            tag_scalar_dict={'train': correct},
                                             global_step=self.global_iter)
                         self.tf.add_scalars(main_tag='performance/error',
-                                            tag_scalar_dict={'train':1-correct},
+                                            tag_scalar_dict={'train': 1 - correct},
                                             global_step=self.global_iter)
                         self.tf.add_scalars(main_tag='performance/cost',
-                                            tag_scalar_dict={'train':cost.data[0]},
+                                            tag_scalar_dict={'train': cost.data[0]},
                                             global_step=self.global_iter)
             self.test()
             if e % 10 == 0:

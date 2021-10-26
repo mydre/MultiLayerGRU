@@ -385,10 +385,12 @@ class BottleStack(nn.Module):
         _, c, h, w = x.shape
         assert c == self.dim, f'channels of feature map {c} must match channels given at init {self.dim}'  # 这个是assert的提示信息，如果报错了可以很方便查看提示信息
         assert h == self.fmap_size[0] and w == self.fmap_size[1], f'height and width ({h} {w}) of feature map must match the fmap_size given at init {self.fmap_size}'
-        out = self._mygruNet(x)
+        # out = self._mygruNet(x)
+        # x = x.float()
         x = self.net_atten(x)  # 这个net中有多个BottleBlock网络块
         x = self.net_stackOne(x)
-        return x + out
+        return x
+        # return x + out
 
 
 class ReshapeNet(nn.Module):
@@ -436,7 +438,7 @@ class ReshapeNet3(nn.Module):
     h_n :[D * NL, N, HD]
 '''
 class MyGruNet(nn.Module):
-    def __init__(self,*,y_dim,num_steps,input_size,hidden_size = 64,num_layer = 3,is_bidirectional = True):
+    def __init__(self,*,y_dim,num_steps,input_size,hidden_size = 64,num_layer = 9,is_bidirectional = True):
         super().__init__()
         self.IP = input_size # self.IP表示input_size
         self.L= num_steps # self.L表示num_stes
@@ -450,18 +452,26 @@ class MyGruNet(nn.Module):
         self._sig = nn.ReLU()
         self._sof = nn.Softmax()
 
+        # self.linear1 = nn.Linear(self.D * self.L * self.HD, 64)
         self.linear1 = nn.Linear(self.D * self.L * self.HD, 64)
-        self.relu1 = nn.ReLU()
         self.linear4 = nn.Linear(64, 32)
-        self.relu4 = nn.ReLU()
+        self.lin1 = nn.Linear(32,64)
+        self.lin2 = nn.Linear(64,32)
+        # self.lin1 = nn.Linear(32, 32)
+        # self.lin2 = nn.Linear(32, 32)
         self.linear2 = nn.Linear(32, 16)
-        self.relu2 = nn.ReLU()
+        self.lin1_ = nn.Linear(16,32)
+        self.lin2_ = nn.Linear(32,16)
+        # self.lin1_ = nn.Linear(16, 16)
+        # self.lin2_ = nn.Linear(16, 16)
         self.linear5 = nn.Linear(16, 8)
-        self.relu5 = nn.ReLU()
         self.linear3 = nn.Linear(8, y_dim)
-        self.relu3 = nn.ReLU()
-        # self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1,self.relu1, self.linear4,self.relu4,self.linear2,self.relu2, self.linear5,self.relu5,self.linear3,self.relu3)
-        self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1, self.linear4,self.linear2,self.linear5,self.linear3)
+        self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1, self.linear4,self.linear2, self.linear5,self.linear3)
+
+        # self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1,self.linear4,self.lin1,self.lin2,self.linear2,self.linear5,self.linear3)
+        # self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1,self.linear4,self.linear2,self.lin1_,self.lin2_,self.linear5,self.linear3)
+
+        # self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1,self.linear4,self.lin1,self.lin2,self.linear2,self.lin1_,self.lin2_,self.linear5,self.linear3)
 
     def forward(self,input):
         # input shape格式：[L,N,IP]，即[num_steps,batch,input_size]
@@ -470,6 +480,6 @@ class MyGruNet(nn.Module):
         # output:[19,128,1 * 256], h_n: [1 * 1, 128, 256]
         #    _,h_n = self.gru(input)
         #    h_n = h_n.view(-1,self.D * self.NL * self.HD)
-        input = input.float()
+        # input = input.float()
         out = self.net_stackOne(input)
         return out

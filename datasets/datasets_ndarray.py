@@ -29,6 +29,7 @@ class MyDataSetArray(Dataset):
         img,target = self.data[index],int(self.label[index])
         img = torch.from_numpy(img)
         img = img.view(-1,self.p_width,self.p_width)
+        img = img.float()
         return img,target
 
     def __len__(self):

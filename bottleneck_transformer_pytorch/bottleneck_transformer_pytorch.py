@@ -445,7 +445,8 @@ class MyGruNet(nn.Module):
         self.NL = num_layer # self.NL表示num_layer
         self.HD = hidden_size # self.HD表示hidden_size
         self.D = 1 if not is_bidirectional else 2
-        self.gru = nn.GRU(self.IP,self.HD,self.NL,bidirectional=is_bidirectional)  # [IP,HD,NL] 表示input_size,hidden_size,num_layers
+        # self.gru = nn.GRU(self.IP,self.HD,self.NL,bidirectional=is_bidirectional)  # [IP,HD,NL] 表示input_size,hidden_size,num_layers
+        self.gru = nn.LSTM(self.IP,self.HD,self.NL,bidirectional=is_bidirectional)
 
         self._reshape2 = ReshapeNet2(self.L)
         self._reshape3 = ReshapeNet3(self.D,self.L,self.HD,self.NL)
@@ -464,11 +465,11 @@ class MyGruNet(nn.Module):
         # self.lin2_ = nn.Linear(16, 16)
         self.linear5 = nn.Linear(16, 8)
         self.linear3 = nn.Linear(8, y_dim)
-        self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1, self.linear4,self.linear2, self.linear5,self.linear3)
 
+
+        self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1, self.linear4,self.linear2, self.linear5,self.linear3)
         # self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1,self.linear4,self.lin1,self.lin2,self.linear2,self.linear5,self.linear3)
         # self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1,self.linear4,self.linear2,self.lin1_,self.lin2_,self.linear5,self.linear3)
-
         # self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1,self.linear4,self.lin1,self.lin2,self.linear2,self.lin1_,self.lin2_,self.linear5,self.linear3)
 
     def forward(self,input):
@@ -479,5 +480,4 @@ class MyGruNet(nn.Module):
         #    _,h_n = self.gru(input)
         #    h_n = h_n.view(-1,self.D * self.NL * self.HD)
         # input = input.float()
-        out = self.net_stackOne(input)
-        return out
+        return self.net_stackOne(input)

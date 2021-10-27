@@ -61,9 +61,9 @@ def return_data2(args):
         dataset=trainDataset,
         batch_size=batch_size,
         shuffle=True,
-        #num_workers=1,
-        #pin_memory=True,
-        drop_last=True,
+        # num_workers=1,
+        # pin_memory=True,
+        # drop_last=True,
     )
 
     test_loader = DataLoader(

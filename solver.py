@@ -139,7 +139,6 @@ class Solver(object):
 
     def semi_loss(self, outputs_x, targets_x, outputs_u, targets_u, epoch):#[64,10],[64,10],[128,10],[128,10]
         probs_u = F.softmax(outputs_u, dim=1)
-
         Lx = -torch.mean(torch.sum(F.log_softmax(outputs_x, dim=1) * targets_x, dim=1))
         Lu = torch.mean((probs_u - targets_u)**2)
 
@@ -151,22 +150,27 @@ class Solver(object):
         for e in range(1,self.epoch+1): # e从1开始算起
             self.global_epoch += 1
             for batch_idx, (images, labels) in enumerate(self.data_loader['train']):
+                shape0 = images.shape[0]
                 try:
                     inputs_u, _ = unlabel_train_iter.next()  # images和inuts_u的shape是[64,1,28,28]
                 except Exception as mye:
                     unlabel_train_iter = iter(self.data_loader['un_label'])
                     inputs_u, _ = unlabel_train_iter.next()
+                inputs_u = inputs_u[0:shape0]
                 self.global_iter += 1
-                batch_size = images.size(0)
+                # batch_size = images.size(0)
+                batch_size = shape0
                 targets_x = torch.zeros(batch_size, self.y_dim).scatter_(1, labels.view(-1, 1).long(), 1)
                 targets_x = Variable(cuda(targets_x, self.cuda))
 
                 x = Variable(cuda(images, self.cuda))
                 y = Variable(cuda(labels, self.cuda))
+
                 inputs_u = Variable(cuda(inputs_u, self.cuda))  # 变为在cuda上执行的变量
                 # x = x.view(args.batch_size, 1, args.pixel_width ** 2)
                 x = x.view(-1, 1, args.pixel_width ** 2)
-                inputs_u = inputs_u.view(args.batch_size, 1, args.pixel_width ** 2)
+                # inputs_u = inputs_u.view(args.batch_size, 1, args.pixel_width ** 2)
+                inputs_u = inputs_u.view(-1, 1, args.pixel_width ** 2)
                 with torch.no_grad():
                     outputs_u = self.net(inputs_u)
                     p = F.softmax(outputs_u, dim=1)
@@ -189,6 +193,7 @@ class Solver(object):
                 # 4.在批次之间交错标记和未标记的样品，以获得正确的批次规范计算
                 mixed_input = list(torch.split(mixed_input, batch_size))
                 mixed_input = self.interleave(mixed_input, batch_size)
+
                 logits = [self.net(mixed_input[0])]
                 logits.append(self.net(mixed_input[1]))
                 logits = self.interleave(logits, batch_size)

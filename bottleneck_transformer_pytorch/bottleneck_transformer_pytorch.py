@@ -430,6 +430,7 @@ class ReshapeNet3(nn.Module):
     IP: input_size
     NL: num_layers
     HD: hidden_size
+    D: bidirectional,true would be 2,false would be 1
     输入参数：
     input:[L,N,IP] N表示batch_size
     h0 = [NL,N,HD]
@@ -438,7 +439,7 @@ class ReshapeNet3(nn.Module):
     h_n :[D * NL, N, HD]
 '''
 class MyGruNet(nn.Module):
-    def __init__(self,*,y_dim,num_steps,input_size,hidden_size = 64,num_layer = 9,is_bidirectional = True):
+    def __init__(self,*,y_dim,num_steps,input_size,hidden_size = 64,num_layer = 5,is_bidirectional = True):
         super().__init__()
         self.IP = input_size # self.IP表示input_size
         self.L= num_steps # self.L表示num_stes
@@ -467,10 +468,8 @@ class MyGruNet(nn.Module):
         self.linear3 = nn.Linear(8, y_dim)
 
 
-        self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1, self.linear4,self.linear2, self.linear5,self.linear3)
-        # self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1,self.linear4,self.lin1,self.lin2,self.linear2,self.linear5,self.linear3)
-        # self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1,self.linear4,self.linear2,self.lin1_,self.lin2_,self.linear5,self.linear3)
-        # self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1,self.linear4,self.lin1,self.lin2,self.linear2,self.lin1_,self.lin2_,self.linear5,self.linear3)
+        # self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1, self.linear4,self.linear2, self.linear5,self.linear3)
+        self.net_stackOne = nn.Sequential(self._reshape2,self.gru,self._reshape3,self.linear1,self.linear4,self.lin1,self.lin2,self.linear2,self.lin1_,self.lin2_,self.linear5,self.linear3)
 
     def forward(self,input):
         # input shape格式：[L,N,IP]，即[num_steps,batch,input_size]

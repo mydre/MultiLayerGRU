@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='hahahahhahahhh')
     parser.add_argument('--epoch', type=int, default=50, help='epoch size')
-    parser.add_argument('--batch_size', type=int, default=128, help='mini-batch size')
+    parser.add_argument('--batch_size', type=int, default=512, help='mini-batch size')
     parser.add_argument('--lr', type=float, default=2e-3, help='learning rate')
     # gan模型训练的时候的learning rate是2e-6
     # parser.add_argument('--lr', type=float, default=2e-6, help='learning rate')

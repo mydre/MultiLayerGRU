@@ -234,7 +234,7 @@ class Solver(object):
                 # lds = self.at_loss(x,y)
                 # loss_lds = self.at_loss(x, y)
                 # cost = loss_ + loss
-                cost = loss_
+                cost = loss_ + loss
 
                 self.optim.zero_grad()
                 cost.backward()
